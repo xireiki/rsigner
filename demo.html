@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>rsigner.js demo</title>
+<style>
+body { font-family: monospace; max-width: 720px; margin: 2em auto; padding: 0 1em; }
+pre { background: #f4f4f4; padding: .5em; border-radius: 4px; overflow-x: auto; font-size: 13px; }
+button { font: inherit; padding: .3em .8em; cursor: pointer; }
+input[type=file] { font: inherit; }
+</style>
+</head>
+<body>
+<h1>rsigner.js demo</h1>
+
+<h3>1. 生成密钥对</h3>
+<button id="genkey">生成 2048-bit RSA 密钥对</button>
+<pre id="keyout">（点击按钮）</pre>
+
+<h3>2. 加密</h3>
+<p>
+  明文：<input id="plaintext" value="hello rsigner" size="30">
+  <button id="do-encrypt">加密</button>
+</p>
+<pre id="encout">（先生成密钥）</pre>
+
+<h3>3. 解密</h3>
+<button id="do-decrypt">解密</button>
+<pre id="decout">（先加密）</pre>
+
+<script type="module">
+import * as r from './rsigner.js';
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+let privKey, pubKey;
+
+document.getElementById('genkey').onclick = async () => {
+	try {
+		const kp = await r.generateKeyPair(2048);
+		privKey = kp.privateKey;
+		pubKey = kp.publicKey;
+		const privPem = await r.exportPrivateKey(privKey);
+		const pubPem = await r.exportPublicKey(pubKey);
+		document.getElementById('keyout').textContent =
+			`Private Key:\n${privPem}\nPublic Key:\n${pubPem}`;
+	} catch (e) {
+		document.getElementById('keyout').textContent = `Error: ${e}`;
+	}
+};
+
+let lastSig, lastCt;
+
+document.getElementById('do-encrypt').onclick = async () => {
+	if (!privKey) return alert('请先生成密钥');
+	try {
+		const pt = encoder.encode(document.getElementById('plaintext').value);
+		const { signature, ciphertext } = await r.encrypt(pt, privKey);
+		lastSig = signature;
+		lastCt = ciphertext;
+		document.getElementById('encout').textContent =
+			`signature (${signature.length}B hex):\n${bytesToHex(signature)}\n\nciphertext (${ciphertext.length}B hex):\n${bytesToHex(ciphertext)}`;
+	} catch (e) {
+		document.getElementById('encout').textContent = `Error: ${e}`;
+	}
+};
+
+document.getElementById('do-decrypt').onclick = async () => {
+	if (!pubKey || !lastSig || !lastCt) return alert('请先生成密钥并加密');
+	try {
+		const pt = await r.decrypt(lastSig, lastCt, pubKey);
+		document.getElementById('decout').textContent =
+			`✓ 解密成功: "${decoder.decode(pt)}"`;
+	} catch (e) {
+		document.getElementById('decout').textContent = `Error: ${e}`;
+	}
+};
+
+function bytesToHex(b) {
+	return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+</script>
+</body>
+</html>
